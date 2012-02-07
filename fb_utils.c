@@ -7,14 +7,37 @@
 #include <sys/stat.h>
 #include <string.h>
 
-#define PIXEL_POINTER(x, y) ((fbd+x+(y*vinfo.xres)))
+#define PIXEL_POINTER(x, y) ((buffer+x+(y*vinfo.xres)))
+
+struct _rgba
+{
+  char b;
+  char g;
+  char r;
+  char a;
+};
+
+union _pixel32
+{
+  struct _rgba rgba;
+  unsigned int raw;
+};
+
+typedef union _pixel32 pixel32;
 
 char *fb_name = "/dev/fb0";
-int fb_fd;
+int fb_fd = 0;
 struct fb_var_screeninfo vinfo;
 struct fb_fix_screeninfo finfo;
-long int screensize = 0;
-char *fbd = 0;
+long long screensize = 0;
+pixel32 *fbd = NULL;
+pixel32 *buffer = NULL;
+pixel32 **lines = NULL;
+
+int bufferX   = 0;
+int bufferY   = 0;
+int visibleX  = 0;
+int visibleY  = 0;
 
 void erreur(char *message, int errorcode)
 {
@@ -37,40 +60,82 @@ void init_fb(char *fb_name)
     erreur("FBIOGET_VSCREENINFO : \
       erreur à la lecture des informations variables.\n", 3);
   
-  screensize = (vinfo.xres * vinfo.yres)
-    * ((vinfo.bits_per_pixel + 7) >> 3);
+  bufferX   = (finfo.smem_len / vinfo.yres)>>2;
+  bufferY   = vinfo.yres;
+  visibleX  = vinfo.xres;
+  visibleY  = vinfo.yres;
+  screensize = finfo.smem_len;
   
-  fbd = (char *)mmap(0, screensize,
+  fbd = (pixel32 *)mmap(0, screensize,
     PROT_READ | PROT_WRITE, MAP_SHARED, fb_fd, 0);
-  if ((int)fbd == -1)
+  if (fbd == -1)
     erreur("échec de mmap() du framebuffer.\n", 4);
+  
+  buffer = (pixel32*)malloc(screensize);
+  memset(buffer, 0xff, screensize);
+  lines = (pixel32**)malloc(vinfo.yres * sizeof(pixel32*));
+  int i = vinfo.yres;
+  for ( ; --i >= 0; )
+    lines[i] = buffer + i * bufferX;
 }
 
-inline set_pixel8(int x, int y, char c)
+void finalize_fb()
 {
-  *PIXEL_POINTER(x, y) = c;
+  if (buffer) free(buffer);
+  if (lines) free(lines);
+  if (fbd) munmap(fbd, screensize);
+  if (fb_fd) close(fb_fd);
 }
 
-inline set_pixel8_clip(int x, int y, char c)
+inline void reverse_pixel(int x, int y)
 {
-  if (((unsigned int)x < vinfo.xres)
-    && ((unsigned int)y < vinfo.yres))
-  set_pixel8(x, y, c);
+  pixel32 *old = lines[y] + x;
+  old->raw = ~old->raw;
+}
+
+inline void blit_screen()
+{
+  memcpy(fbd, buffer, screensize);
+}
+
+inline void draw_rect(int x, int y, int w, int h, pixel32 color)
+{
+  int i = y + h;
+  for (; --i >= y; )
+    wmemset(lines[i] + x, color.raw, w);
+}
+
+inline void draw_hline(int x, int y, int l, pixel32 color)
+{
+  wmemset(lines[y] + x, color.raw, l);
+}
+
+inline void draw_vline(int x, int y, int l, pixel32 color)
+{
+  int i = y + l;
+  for (; --i >= y; )
+    lines[i][x] = color;
 }
 
 int main(int argc, char *argv[])
 {
   init_fb(fb_name);
   
-  int i, j, k;
-  
-  for (k = 0; k < 32; k++)
+  pixel32 red;  red.raw  = 0xffff0000;
+  pixel32 blue; blue.raw = 0xff0000ff;
+  int i = 0xff;
+  for ( ; --i >= 0; )
   {
-    usleep(2000);
-    for (i = 0; i < 100; i++)
-      for (j = 0; j < 1000; j++)
-        set_pixel8_clip(i+k*100, j, k%16);
+    blue.rgba.g = i;
+    draw_rect(i, i, 200, 200, blue);
+    draw_vline(400 + i<<1, i<<1, 50, red);
+    draw_hline(400 + i<<1, i<<1, 50, red);
   }
+  
+  while (1)
+    blit_screen();
+  
+  finalize_fb();
   
   return EXIT_SUCCESS;
 }
