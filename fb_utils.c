@@ -6,6 +6,7 @@
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <string.h>
+#include <limits.h>
 
 #define PIXEL_POINTER(x, y) ((buffer+x+(y*vinfo.xres)))
 
@@ -132,8 +133,18 @@ int main(int argc, char *argv[])
     draw_hline(400 + i<<1, i<<1, 50, red);
   }
   
-  while (1)
+  for (i = 0; i < INT_MAX; i++)
+  {
+    wmemset(buffer, i, screensize>>2);  
+    blue.rgba.g = i%0xff;
+    draw_hline(5, 5, 1670, red);
+    draw_hline(5, 1040, 1670, red);
+    draw_vline(400 + (i%100)<<1, (i%100)<<1, 100, red);
+    draw_hline(400 + (i%100)<<1, (i%100)<<1, 100, red);
+    draw_vline(450 + (i%100)<<1, (i%100)<<1, 100, red);
+    draw_hline(400 + (i%100)<<1, 50 + (i%100)<<1, 100, red);
     blit_screen();
+  }
   
   finalize_fb();
   
