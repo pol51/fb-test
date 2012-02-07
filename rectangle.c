@@ -51,9 +51,17 @@ void init_fb(char *fb_name)
   screensize = (vinfo.xres * vinfo.yres)
     * ((vinfo.bits_per_pixel + 7) >> 3);
   
-  printf("screenwidth  = %d\n", vinfo.xres);
-  printf("screenheight = %d\n", vinfo.yres);
-  printf("screendepth  = %d\n", vinfo.bits_per_pixel);
+  printf("smem_len      = %d\n", finfo.smem_len);
+  printf("xpanstep      = %d\n", finfo.xpanstep);
+  printf("ypanstep      = %d\n", finfo.ypanstep);
+  printf("ywrapstep     = %d\n", finfo.ywrapstep);
+  printf("line_length   = %d\n", finfo.line_length);
+  
+  printf("screenwidth   = %d\n", vinfo.xres);
+  printf("screenheight  = %d\n", vinfo.yres);
+  printf("vscreenwidth  = %d\n", vinfo.xres_virtual);
+  printf("vscreenheight = %d\n", vinfo.yres_virtual);
+  printf("screendepth   = %d\n", vinfo.bits_per_pixel);
   
   fbd = (unsigned char*)mmap(0, finfo.smem_len,
     PROT_READ | PROT_WRITE, MAP_SHARED, fb_fd, 0);
